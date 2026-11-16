@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest
+anyio[trio]
+pytest-anyio
+httpx
+asgi-lifespan
