@@ -61,7 +61,7 @@ The server stores only token hashes in `MCP_TOKENS_JSON`; each member keeps thei
    }
    ```
 
-   The member's local `.env` contains:
+   Copy `.env.example` to `.env` in the client project and set the member's personal token:
 
    ```env
    LUMI_MCP_TOKEN=their_personal_token
@@ -79,7 +79,7 @@ Individual tokens provide identity and individual revocation. At this stage, all
 
 ### Legacy single-token mode
 
-If `MCP_TOKENS_JSON` is not set, the server accepts `MCP_API_TOKEN` as the original shared token. This is useful during migration. Once per-member tokens are configured, the shared token is ignored.
+If `MCP_TOKENS_JSON` is not set, the server accepts `MCP_API_TOKEN` as the original shared token. This is useful during migration. Once per-member tokens are configured, the shared token is ignored. After verifying that each member can connect with their personal token, remove the old `MCP_API_TOKEN` variable from Render so it cannot become an unintended fallback if `MCP_TOKENS_JSON` is later removed.
 
 For local server development, you can set `MCP_API_TOKEN` in a local environment. If no token is configured locally, authentication is disabled. On Render, the server refuses to start without authentication configured.
 
