@@ -9,6 +9,12 @@ LUMI 팀이 함께 사용하는 원격 MCP 서버입니다. Python MCP SDK의 St
 
 Render 무료 플랜은 일정 시간 요청이 없으면 서버가 잠들 수 있습니다. 다시 요청하면 서버가 깨어나는 동안 첫 연결이 지연될 수 있습니다.
 
+## 팀원 설치 안내
+
+원격 MCP 서버를 사용하는 팀원이 설치해야 하는 프로그램과 설치하지 않아도 되는 항목은 [TEAM_INSTALL.md](TEAM_INSTALL.md)를 참고하세요.
+
+팀원은 개인 인증 토큰만 전달받으면 됩니다. 토큰 생성과 Render 등록은 관리자가 진행합니다.
+
 ## 저장소 구성
 
 ```text
@@ -19,6 +25,7 @@ LUMI_MCP_SERVER/
 ├── requirements-dev.txt            # 테스트 및 개발용 패키지
 ├── .env.example                    # 로컬 서버 개발용 환경변수 예시
 ├── .gitignore                      # 비밀정보 및 로컬 파일 제외
+├── TEAM_INSTALL.md                 # 팀원용 설치 안내
 ├── scripts/
 │   └── generate_member_token.py    # 팀원별 인증 토큰 생성
 └── tests/
