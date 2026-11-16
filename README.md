@@ -43,7 +43,7 @@ The server stores only token hashes in `MCP_TOKENS_JSON`; each member keeps thei
    {"alice":"<alice_sha256_hash>","member_02":"<member_02_sha256_hash>"}
    ```
 
-   Keep all active members in the object. Save the variable; Render will restart the service.
+   Keep all active members in the object. Choose **Save and deploy** (or **Save, rebuild, and deploy**) so the running service receives the new value. **Save only** does not apply the new value until a later deploy.
 
 4. The member's client configuration references the local environment variable, not the token literal:
 
@@ -71,7 +71,7 @@ The server stores only token hashes in `MCP_TOKENS_JSON`; each member keeps thei
 
 ### Revoke a member
 
-Remove that member's ID/hash pair from `MCP_TOKENS_JSON` in Render and save. The service restarts and that member's token is rejected. Other members' tokens remain valid.
+Remove that member's ID/hash pair from `MCP_TOKENS_JSON` in Render, then choose **Save and deploy**. After deployment, that member's token is rejected while other members' tokens remain valid.
 
 ### Current authorization scope
 
@@ -85,7 +85,7 @@ For local server development, you can set `MCP_API_TOKEN` in a local environment
 
 ## Deploying
 
-The service is configured in `render.yaml`. This repository uses `autoDeploy: false`, so after pushing changes to GitHub, open Render and select **Manual Deploy → Deploy latest commit**.
+The service is configured in `render.yaml`. This repository uses `autoDeploy: false`, so after pushing code changes to GitHub, open Render and select **Manual Deploy → Deploy latest commit**.
 
 The MCP endpoint is:
 
