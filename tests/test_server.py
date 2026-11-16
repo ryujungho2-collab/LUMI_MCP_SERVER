@@ -123,6 +123,44 @@ async def test_member_token_auth_and_identity():
 
 
 @pytest.mark.anyio
+async def test_create_app_prefers_member_tokens_over_legacy():
+    saved_hashes = server_module.MEMBER_TOKEN_HASHES
+    saved_legacy_token = server_module.MCP_API_TOKEN
+    member_token = "alice-personal-token"
+
+    try:
+        server_module.MEMBER_TOKEN_HASHES = {
+            "alice": hashlib.sha256(member_token.encode("utf-8")).hexdigest()
+        }
+        server_module.MCP_API_TOKEN = TOKEN
+        app = create_app()
+
+        async with LifespanManager(app):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url=BASE_URL
+            ) as client:
+                legacy_response = await client.post(
+                    "/mcp",
+                    headers={**MCP_HEADERS, "Authorization": f"Bearer {TOKEN}"},
+                    json=INIT_BODY,
+                )
+                member_response = await client.post(
+                    "/mcp",
+                    headers={
+                        **MCP_HEADERS,
+                        "Authorization": f"Bearer {member_token}",
+                    },
+                    json=INIT_BODY,
+                )
+    finally:
+        server_module.MEMBER_TOKEN_HASHES = saved_hashes
+        server_module.MCP_API_TOKEN = saved_legacy_token
+
+    assert legacy_response.status_code == 401
+    assert member_response.status_code == 200
+
+
+@pytest.mark.anyio
 async def test_mcp_correct_token(managed_app, authed_headers):
     async with AsyncClient(
         transport=ASGITransport(app=managed_app), base_url=BASE_URL
