@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
@@ -79,6 +80,49 @@ async def test_mcp_wrong_token(managed_app):
 
 
 @pytest.mark.anyio
+async def test_member_token_auth_and_identity():
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+
+    member_token = "alice-private-token"
+    member_hash = hashlib.sha256(member_token.encode("utf-8")).hexdigest()
+
+    async def whoami(request: Request):
+        return JSONResponse(
+            {"member_id": request.scope["state"]["mcp_member_id"]}
+        )
+
+    app = Starlette(routes=[Route("/whoami", whoami)])
+    app.add_middleware(
+        BearerAuthMiddleware,
+        member_token_hashes={"alice": member_hash},
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url=BASE_URL
+    ) as client:
+        valid = await client.get(
+            "/whoami",
+            headers={"Authorization": f"Bearer {member_token}"},
+        )
+        old_shared = await client.get(
+            "/whoami",
+            headers={"Authorization": f"Bearer {TOKEN}"},
+        )
+        invalid = await client.get(
+            "/whoami",
+            headers={"Authorization": "Bearer invalid-token"},
+        )
+
+    assert valid.status_code == 200
+    assert valid.json() == {"member_id": "alice"}
+    assert old_shared.status_code == 401
+    assert invalid.status_code == 401
+
+
+@pytest.mark.anyio
 async def test_mcp_correct_token(managed_app, authed_headers):
     async with AsyncClient(
         transport=ASGITransport(app=managed_app), base_url=BASE_URL
@@ -91,7 +135,7 @@ async def test_mcp_correct_token(managed_app, authed_headers):
 
 @pytest.mark.anyio
 async def test_mcp_open_when_no_token_set():
-    """Verify auth middleware passes requests through when MCP_API_TOKEN is unset."""
+    """Verify a bare local app can run without auth middleware."""
     from starlette.applications import Starlette
     from starlette.routing import Route
     from starlette.responses import JSONResponse
@@ -99,14 +143,10 @@ async def test_mcp_open_when_no_token_set():
     async def ok(request):
         return JSONResponse({"passed": True})
 
-    # When MCP_API_TOKEN is None, create_app() skips the middleware entirely.
-    # Simulate that by building a bare app (no BearerAuthMiddleware).
     saved = server_module.MCP_API_TOKEN
     try:
         server_module.MCP_API_TOKEN = None
         bare_app = Starlette(routes=[Route("/mcp", ok, methods=["POST"])])
-        # Verify create_app logic: middleware is NOT added when token is unset
-        assert server_module.MCP_API_TOKEN is None
         async with AsyncClient(
             transport=ASGITransport(app=bare_app), base_url=BASE_URL
         ) as client:
