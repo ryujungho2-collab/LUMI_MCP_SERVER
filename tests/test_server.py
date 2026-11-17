@@ -1,6 +1,5 @@
 import os
 import json
-import hashlib
 import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
@@ -8,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 os.environ["MCP_API_TOKEN"] = "test-token"
 
 import server as server_module  # noqa: E402
-from server import create_app, BearerAuthMiddleware  # noqa: E402
+from server import create_app  # noqa: E402
 
 TOKEN = "test-token"
 BASE_URL = "http://localhost"
@@ -80,87 +79,6 @@ async def test_mcp_wrong_token(managed_app):
 
 
 @pytest.mark.anyio
-async def test_member_token_auth_and_identity():
-    from starlette.applications import Starlette
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse
-    from starlette.routing import Route
-
-    member_token = "alice-private-token"
-    member_hash = hashlib.sha256(member_token.encode("utf-8")).hexdigest()
-
-    async def whoami(request: Request):
-        return JSONResponse(
-            {"member_id": request.scope["state"]["mcp_member_id"]}
-        )
-
-    app = Starlette(routes=[Route("/whoami", whoami)])
-    app.add_middleware(
-        BearerAuthMiddleware,
-        member_token_hashes={"alice": member_hash},
-    )
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url=BASE_URL
-    ) as client:
-        valid = await client.get(
-            "/whoami",
-            headers={"Authorization": f"Bearer {member_token}"},
-        )
-        old_shared = await client.get(
-            "/whoami",
-            headers={"Authorization": f"Bearer {TOKEN}"},
-        )
-        invalid = await client.get(
-            "/whoami",
-            headers={"Authorization": "Bearer invalid-token"},
-        )
-
-    assert valid.status_code == 200
-    assert valid.json() == {"member_id": "alice"}
-    assert old_shared.status_code == 401
-    assert invalid.status_code == 401
-
-
-@pytest.mark.anyio
-async def test_create_app_prefers_member_tokens_over_legacy():
-    saved_hashes = server_module.MEMBER_TOKEN_HASHES
-    saved_legacy_token = server_module.MCP_API_TOKEN
-    member_token = "alice-personal-token"
-
-    try:
-        server_module.MEMBER_TOKEN_HASHES = {
-            "alice": hashlib.sha256(member_token.encode("utf-8")).hexdigest()
-        }
-        server_module.MCP_API_TOKEN = TOKEN
-        app = create_app()
-
-        async with LifespanManager(app):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url=BASE_URL
-            ) as client:
-                legacy_response = await client.post(
-                    "/mcp",
-                    headers={**MCP_HEADERS, "Authorization": f"Bearer {TOKEN}"},
-                    json=INIT_BODY,
-                )
-                member_response = await client.post(
-                    "/mcp",
-                    headers={
-                        **MCP_HEADERS,
-                        "Authorization": f"Bearer {member_token}",
-                    },
-                    json=INIT_BODY,
-                )
-    finally:
-        server_module.MEMBER_TOKEN_HASHES = saved_hashes
-        server_module.MCP_API_TOKEN = saved_legacy_token
-
-    assert legacy_response.status_code == 401
-    assert member_response.status_code == 200
-
-
-@pytest.mark.anyio
 async def test_mcp_correct_token(managed_app, authed_headers):
     async with AsyncClient(
         transport=ASGITransport(app=managed_app), base_url=BASE_URL
@@ -172,27 +90,38 @@ async def test_mcp_correct_token(managed_app, authed_headers):
 
 
 @pytest.mark.anyio
-async def test_mcp_open_when_no_token_set():
-    """Verify a bare local app can run without auth middleware."""
-    from starlette.applications import Starlette
-    from starlette.routing import Route
-    from starlette.responses import JSONResponse
-
-    async def ok(request):
-        return JSONResponse({"passed": True})
-
-    saved = server_module.MCP_API_TOKEN
+async def test_create_app_requires_token_on_render():
+    saved_token = server_module.MCP_API_TOKEN
+    saved_hostname = server_module.RENDER_EXTERNAL_HOSTNAME
     try:
         server_module.MCP_API_TOKEN = None
-        bare_app = Starlette(routes=[Route("/mcp", ok, methods=["POST"])])
-        async with AsyncClient(
-            transport=ASGITransport(app=bare_app), base_url=BASE_URL
-        ) as client:
-            resp = await client.post("/mcp", headers=MCP_HEADERS, json=INIT_BODY)
-        assert resp.status_code == 200
-        assert resp.json() == {"passed": True}
+        server_module.RENDER_EXTERNAL_HOSTNAME = "example.onrender.com"
+        with pytest.raises(RuntimeError, match="Set MCP_API_TOKEN"):
+            create_app()
     finally:
-        server_module.MCP_API_TOKEN = saved
+        server_module.MCP_API_TOKEN = saved_token
+        server_module.RENDER_EXTERNAL_HOSTNAME = saved_hostname
+
+
+@pytest.mark.anyio
+async def test_create_app_allows_local_development_without_token():
+    saved_token = server_module.MCP_API_TOKEN
+    saved_hostname = server_module.RENDER_EXTERNAL_HOSTNAME
+    try:
+        server_module.MCP_API_TOKEN = None
+        server_module.RENDER_EXTERNAL_HOSTNAME = None
+        app = create_app()
+        async with LifespanManager(app):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url=BASE_URL
+            ) as client:
+                resp = await client.post(
+                    "/mcp", headers=MCP_HEADERS, json=INIT_BODY
+                )
+        assert resp.status_code == 200
+    finally:
+        server_module.MCP_API_TOKEN = saved_token
+        server_module.RENDER_EXTERNAL_HOSTNAME = saved_hostname
 
 
 @pytest.mark.anyio
