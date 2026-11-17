@@ -138,6 +138,20 @@ VS Code는 사용하는 에이전트/확장에 따라 MCP 설정 위치와 형�
 - 헬스 체크: https://my-mcp-server-3n1j.onrender.com/health
 - MCP 연결 주소: https://my-mcp-server-3n1j.onrender.com/mcp
 
+### 실제 MCP 도구 호출 검증
+
+클라이언트에서 LUMI 서버에 연결한 뒤 에이전트 채팅에 아래와 같이 입력하세요.
+
+> LUMI MCP 서버의 verify_connection 도구를 실제로 호출해 줘. message는 team-test-123으로 설정하고 도구가 반환한 원문을 보여줘.
+
+실제 도구 호출 결과가 다음과 같으면 연결, 인증 및 MCP 도구 실행이 성공한 것입니다.
+
+```text
+LUMI_CONNECTION_OK: team-test-123
+```
+
+클라이언트의 도구 호출 기록에서 `verify_connection`이 실제 실행되었는지 확인하세요. 에이전트가 결과를 추측해서 답한 것은 성공으로 간주하지 않습니다. 테스트 메시지는 임의로 바꿀 수 있으며, 공용 토큰이나 개인정보를 입력하지 마세요. `/health`는 공개 상태 확인용이므로 그것만으로 인증 성공을 확인할 수 없습니다.
+
 연결이 안 될 때는 다음 순서로 확인하세요.
 
 1. 환경변수 이름이 정확히 `LUMI_MCP_TOKEN`인지 확인합니다.

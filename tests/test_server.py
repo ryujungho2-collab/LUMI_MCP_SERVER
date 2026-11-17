@@ -146,3 +146,64 @@ async def test_tool_call(managed_app, authed_headers):
         assert resp.status_code == 200
         data = parse_sse_data(resp.text)
         assert data["result"]["content"][0]["text"] == "Hello, World!"
+
+
+@pytest.mark.anyio
+async def test_verify_connection_list_and_call(managed_app, authed_headers):
+    """공용 토큰으로 임시 검증 도구를 조회하고 호출할 수 있어야 한다."""
+    async with AsyncClient(
+        transport=ASGITransport(app=managed_app), base_url=BASE_URL
+    ) as client:
+        resp = await client.post("/mcp", headers=authed_headers, json=INIT_BODY)
+        assert resp.status_code == 200
+
+        resp = await client.post(
+            "/mcp",
+            headers=authed_headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        )
+        assert resp.status_code == 200
+        tools = parse_sse_data(resp.text)["result"]["tools"]
+        assert any(tool["name"] == "verify_connection" for tool in tools)
+
+        resp = await client.post(
+            "/mcp",
+            headers=authed_headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "verify_connection",
+                    "arguments": {"message": "team-test-123"},
+                },
+            },
+        )
+        assert resp.status_code == 200
+        result = parse_sse_data(resp.text)["result"]
+        assert not result.get("isError", False)
+        assert result["content"][0]["text"] == "LUMI_CONNECTION_OK: team-test-123"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("token", [None, "wrong-token"])
+async def test_verify_connection_rejects_unauthorized(managed_app, token):
+    """토큰이 없거나 틀리면 임시 도구도 실행할 수 없다."""
+    headers = dict(MCP_HEADERS)
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
+    async with AsyncClient(
+        transport=ASGITransport(app=managed_app), base_url=BASE_URL
+    ) as client:
+        resp = await client.post(
+            "/mcp",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "verify_connection", "arguments": {}},
+            },
+        )
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == -32001

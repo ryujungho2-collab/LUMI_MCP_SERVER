@@ -27,6 +27,13 @@ def hello(name: str) -> str:
     return f"Hello, {name}!"
 
 
+# 팀원 온보딩용 임시 도구: 인증된 MCP 요청이 실제로 실행되는지 확인한다.
+@mcp.tool()
+def verify_connection(message: str = "ping") -> str:
+    """LUMI MCP 연결 검증용 임시 도구. 토큰이 아닌 임의의 테스트 메시지를 전달하세요."""
+    return f"LUMI_CONNECTION_OK: {message}"
+
+
 # custom_route bypasses auth — use only for public endpoints
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request: Request) -> Response:
