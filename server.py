@@ -93,7 +93,7 @@ def _run_video_clip(video_base64: str, action: str, l_max: float, profile: str, 
 @mcp.tool()
 def analyze_pse_clip(video_base64: str, l_max: float = 200.0,
                      profile: Literal["laptop", "desktop", "tv"] = "laptop") -> dict:
-    """Analyze one uploaded base64 MP4 clip. Experimental SDR model; no safety guarantee. See recommend_video_input for limits."""
+    """Analyze one base64 MP4 clip using the enhanced partial B2 detector. Experimental SDR model; no safety guarantee. See recommend_video_input for limits."""
     return _run_video_clip(video_base64, "analyze", l_max, profile)
 
 
@@ -101,7 +101,7 @@ def analyze_pse_clip(video_base64: str, l_max: float = 200.0,
 def dim_pse_clip(video_base64: str, l_max: float = 200.0,
                  profile: Literal["laptop", "desktop", "tv"] = "laptop",
                  mode: Literal["base", "hold", "safe"] = "base") -> dict:
-    """Dim one base64 MP4 clip and return output_mp4_base64 with the first source audio stream as AAC when present."""
+    """Dim one MP4 with partial B2 and return output_mp4_base64 with the first source audio stream as AAC when present."""
     return _run_video_clip(video_base64, "dim", l_max, profile, mode)
 
 

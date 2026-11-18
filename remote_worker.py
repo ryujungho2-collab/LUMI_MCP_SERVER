@@ -48,7 +48,7 @@ def main():
             result.pop('video', None)
         elif request['action'] == 'dim':
             out = Path(temp) / 'output.mp4'
-            result = module.dim_fullscreen_a1(str(source), str(out), mode=request.get('mode', 'base'), **opts)
+            result = module.dim_partial_b2(str(source), str(out), mode=request.get('mode', 'base'), **opts)
             result.pop('output_video', None)
             output = out.read_bytes()
             if len(output) > 2 * 1024 * 1024:

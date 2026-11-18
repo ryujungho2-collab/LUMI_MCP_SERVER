@@ -18,14 +18,14 @@ def _engine():
     root = os.environ.get("LUMI_ENGINE_DIR")
     if not root:
         raise ValueError("Set LUMI_ENGINE_DIR to the lumi-lab-rockrovks repository root.")
-    engine = Path(root).expanduser().resolve() / "Fullscreen" / "A1"
-    if not (engine / "vdcorefs" / "pipeline.py").is_file():
-        raise ValueError(f"LUMI_ENGINE_DIR does not contain Fullscreen/A1/vdcorefs: {root}")
+    engine = Path(root).expanduser().resolve() / "Partial" / "B2"
+    if not (engine / "vdcoreps" / "pipeline.py").is_file():
+        raise ValueError(f"LUMI_ENGINE_DIR does not contain Partial/B2/vdcoreps: {root}")
     if str(engine) not in sys.path:
         sys.path.insert(0, str(engine))
-    from vdcorefs import ViewingConfig, analyze_video
-    from fullscreen_coreops_1112 import A1Config, dim_video_fullscreen_a1
-    return ViewingConfig, analyze_video, A1Config, dim_video_fullscreen_a1
+    from vdcoreps import ViewingConfig, analyze_video
+    from partial_coreops_1112 import B2PartialConfig, dim_video_partial_b2
+    return ViewingConfig, analyze_video, B2PartialConfig, dim_video_partial_b2
 
 
 def _viewing(profile: str, l_max: float, diagonal_inch: float | None, distance_cm: float | None):
@@ -67,19 +67,19 @@ def analyze_video(video_path: str, l_max: float = 200.0,
     """Analyze a local SDR video for rule-based PSE hazard intervals. l_max is assumed SDR white in cd/m²."""
     p = _input(video_path)
     view = _viewing(profile, l_max, diagonal_inch, distance_cm)
-    _, analyze, _, _ = _engine()
-    result = analyze(p, viewing=view, device=device)
+    _, analyze, B2PartialConfig, _ = _engine()
+    result = analyze(p, viewing=view, device=device, mask_config=B2PartialConfig().to_mask_config())
     return {"notice": NOTICE, "video": str(p), "assumed_l_max_cd_m2": l_max,
-            "profile": profile, "result": _summary(result)}
+            "profile": profile, "detector": "partial_b2_enhanced", "result": _summary(result)}
 
 
 @mcp.tool()
-def dim_fullscreen_a1(video_path: str, output_path: str, l_max: float = 200.0,
+def dim_partial_b2(video_path: str, output_path: str, l_max: float = 200.0,
                       mode: Literal["base", "hold", "safe"] = "base",
                       profile: Literal["laptop", "desktop", "tv"] = "laptop",
                       diagonal_inch: float | None = None, distance_cm: float | None = None,
                       device: Literal["cpu", "cuda"] = "cpu") -> dict:
-    """Create a new A1 dimmed MP4, preserve source audio as AAC, and analyze the encoded output."""
+    """Create a new partial B2 dimmed MP4, preserve source audio as AAC, and analyze the encoded output."""
     source = _input(video_path)
     dest = Path(output_path).expanduser().resolve()
     if dest == source or dest.exists():
@@ -87,26 +87,27 @@ def dim_fullscreen_a1(video_path: str, output_path: str, l_max: float = 200.0,
     if dest.suffix.lower() != ".mp4":
         raise ValueError("output_path must end in .mp4")
     view = _viewing(profile, l_max, diagonal_inch, distance_cm)
-    _, analyze, A1Config, dim = _engine()
+    _, analyze, B2PartialConfig, dim = _engine()
+    cfg = B2PartialConfig(mode=mode, show_hazard_caption=False)
     import imageio_ffmpeg
     with tempfile.TemporaryDirectory(prefix="lumi-pse-") as temp:
         silent = Path(temp) / "video.mp4"
         muxed = Path(temp) / "with-audio.mp4"
-        result = dim(source, silent, a1_config=A1Config(mode=mode), viewing=view, device=device)
+        result = dim(source, silent, b2_config=cfg, viewing=view, device=device)
         command = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
                    "-i", str(silent), "-i", str(source), "-map", "0:v:0", "-map", "1:a:0?",
                    "-c:v", "copy", "-c:a", "aac", "-map_metadata", "1", str(muxed)]
         completed = subprocess.run(command, capture_output=True, text=True, timeout=600)
         if completed.returncode:
             raise RuntimeError(f"Audio remux failed: {completed.stderr[-2000:]}")
-        encoded = analyze(muxed, viewing=view, device=device)
+        encoded = analyze(muxed, viewing=view, device=device, mask_config=cfg.to_mask_config())
         # Exclusive creation ensures another process cannot cause an existing file to be overwritten.
         with dest.open("xb") as target, muxed.open("rb") as source_file:
             import shutil
             shutil.copyfileobj(source_file, target)
     return {"notice": NOTICE, "output_video": str(dest),
             "audio": "First source audio stream included as AAC when present.",
-            "assumed_l_max_cd_m2": l_max, "mode": mode,
+            "assumed_l_max_cd_m2": l_max, "mode": mode, "detector": "partial_b2_enhanced", "dimming": "partial_b2", "hazard_caption": False,
             "before": _summary(result.before), "before_encoding": _summary(result.after),
             "encoded_output": _summary(encoded)}
 
