@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import sys
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Literal
 
@@ -77,7 +79,7 @@ def dim_fullscreen_a1(video_path: str, output_path: str, l_max: float = 200.0,
                       profile: Literal["laptop", "desktop", "tv"] = "laptop",
                       diagonal_inch: float | None = None, distance_cm: float | None = None,
                       device: Literal["cpu", "cuda"] = "cpu") -> dict:
-    """Create a new A1 full-screen dimmed MP4 and separately analyze the encoded output. Audio is not retained."""
+    """Create a new A1 dimmed MP4, preserve source audio as AAC, and analyze the encoded output."""
     source = _input(video_path)
     dest = Path(output_path).expanduser().resolve()
     if dest == source or dest.exists():
@@ -86,9 +88,24 @@ def dim_fullscreen_a1(video_path: str, output_path: str, l_max: float = 200.0,
         raise ValueError("output_path must end in .mp4")
     view = _viewing(profile, l_max, diagonal_inch, distance_cm)
     _, analyze, A1Config, dim = _engine()
-    result = dim(source, dest, a1_config=A1Config(mode=mode), viewing=view, device=device)
-    encoded = analyze(dest, viewing=view, device=device)
-    return {"notice": NOTICE, "output_video": str(dest), "audio_preserved": False,
+    import imageio_ffmpeg
+    with tempfile.TemporaryDirectory(prefix="lumi-pse-") as temp:
+        silent = Path(temp) / "video.mp4"
+        muxed = Path(temp) / "with-audio.mp4"
+        result = dim(source, silent, a1_config=A1Config(mode=mode), viewing=view, device=device)
+        command = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
+                   "-i", str(silent), "-i", str(source), "-map", "0:v:0", "-map", "1:a:0?",
+                   "-c:v", "copy", "-c:a", "aac", "-map_metadata", "1", str(muxed)]
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=600)
+        if completed.returncode:
+            raise RuntimeError(f"Audio remux failed: {completed.stderr[-2000:]}")
+        encoded = analyze(muxed, viewing=view, device=device)
+        # Exclusive creation ensures another process cannot cause an existing file to be overwritten.
+        with dest.open("xb") as target, muxed.open("rb") as source_file:
+            import shutil
+            shutil.copyfileobj(source_file, target)
+    return {"notice": NOTICE, "output_video": str(dest),
+            "audio": "First source audio stream included as AAC when present.",
             "assumed_l_max_cd_m2": l_max, "mode": mode,
             "before": _summary(result.before), "before_encoding": _summary(result.after),
             "encoded_output": _summary(encoded)}

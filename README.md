@@ -94,3 +94,17 @@ Render 환경변수 변경은 코드 푸시와 별개로 Dashboard에서 저장�
 ## 로컬 영상 분석 도구
 
 로컬 PC에 있는 영상을 분석하는 별도 stdio MCP 서버는 [local-pse/README.md](local-pse/README.md)를 참고하세요. 기존 Render 서버와 별도로 실행되며, 팀원 영상 엔진 체크아웃이 필요합니다.
+
+## 원격 영상 클립 도구
+
+- `recommend_video_input`: 입력이 로컬 파일, 일반 URL, YouTube URL인지 구분하고 전송 방법을 안내합니다. URL을 다운로드하지 않습니다.
+- `analyze_pse_clip`: Base64로 전달한 MP4 한 클립의 위험 구간을 분석합니다.
+- `dim_pse_clip`: 한 MP4 클립을 A1 전체 화면 감광하고, 출력 MP4를 Base64로 반환합니다. 원본 첫 번째 오디오가 있으면 AAC로 재인코딩하여 합칩니다.
+
+무료 서버의 용량을 고려해 클립당 1 MiB, 120프레임, 76,800픽셀(예: 320x240), 60fps 이하로 제한하며 한 번에 한 작업만 받습니다. 정상 작동은 클라이언트의 Base64 지원과 서버의 가용 메모리에 달려 있습니다. Render 무료 인스턴스의 메모리는 512 MB이므로 작은 입력도 메모리 부족이 발생할 수 있습니다. 입력·출력 데이터가 클라이언트와 서버 사이를 오가므로 사용 권한이 있는 영상만 보내세요. YouTube URL에서 영상을 가져오지 않습니다.
+
+여러 클립을 개별 분석하면 경계에서 발생하는 깜빡임과 긴 시간의 변화가 누락될 수 있습니다. 오버랩을 사용해도 연속 영상 전체 분석과 동일함이 보장되지 않습니다. 원본 타임스탬프·오디오 싱크, HDR, 의료적 안전성은 보장하지 않습니다.
+
+기존 분석 엔진은 `lumi-vision/lumi-lab-rockrovks`의 Fullscreen/A1 판별기와 보정기 복사본입니다. 연구용이며 화면 휘도 가정에 따라 결과가 달라집니다.
+
+원격 엔진 기준 원본: `lumi-vision/lumi-lab-rockrovks` checkout commit `495460d1ef2ce14fa492432b74f04996ff438458`의 `Fullscreen/A1/vdcorefs`와 `fullscreen_coreops_1112.py`. 수정 없이 복사한 연구용 코드입니다.
