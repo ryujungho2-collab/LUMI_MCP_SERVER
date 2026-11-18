@@ -107,9 +107,12 @@ async def test_create_app_requires_token_on_render():
 async def test_create_app_allows_local_development_without_token():
     saved_token = server_module.MCP_API_TOKEN
     saved_hostname = server_module.RENDER_EXTERNAL_HOSTNAME
+    saved_mcp = server_module.mcp
     try:
         server_module.MCP_API_TOKEN = None
         server_module.RENDER_EXTERNAL_HOSTNAME = None
+        # Each MCP session manager can only be started once.
+        server_module.mcp = server_module.FastMCP("test-local", stateless_http=True, transport_security=server_module.TransportSecuritySettings(enable_dns_rebinding_protection=False))
         app = create_app()
         async with LifespanManager(app):
             async with AsyncClient(
@@ -122,6 +125,7 @@ async def test_create_app_allows_local_development_without_token():
     finally:
         server_module.MCP_API_TOKEN = saved_token
         server_module.RENDER_EXTERNAL_HOSTNAME = saved_hostname
+        server_module.mcp = saved_mcp
 
 
 @pytest.mark.anyio
@@ -207,3 +211,25 @@ async def test_verify_connection_rejects_unauthorized(managed_app, token):
         )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == -32001
+
+@pytest.mark.anyio
+async def test_video_tools_require_auth_and_are_listed(managed_app, authed_headers):
+    async with AsyncClient(transport=ASGITransport(app=managed_app), base_url=BASE_URL) as client:
+        body = {"jsonrpc": "2.0", "id": 4, "method": "tools/list"}
+        assert (await client.post("/mcp", headers=MCP_HEADERS, json=body)).status_code == 401
+        resp = await client.post("/mcp", headers=authed_headers, json=body)
+        names = {t["name"] for t in parse_sse_data(resp.text)["result"]["tools"]}
+        assert {"recommend_video_input", "analyze_pse_clip", "dim_pse_clip"} <= names
+
+
+def test_input_recommendation_classifies_without_download():
+    youtube = server_module.recommend_video_input("https://youtu.be/abc", 2, True)
+    assert youtube["source_type"] == "youtube"
+    assert "boundaries" in youtube["boundary_warning"]
+    assert server_module.recommend_video_input("C:/video.mp4")["source_type"] == "local_file"
+
+
+def test_oversized_clip_is_rejected_without_worker():
+    with pytest.raises(ValueError, match="limit"):
+        server_module.analyze_pse_clip("x" * 1398105)
+
